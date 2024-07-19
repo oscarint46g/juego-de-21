@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blackjack</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <header class="titulo">
+        Blackjack
+    </header>
+    <div class="container text-center mt-2">
+        <button id="nuevo-juego" class="btn btn-danger">Nuevo Juego</button>
+        <button id="pedir-carta" class="btn btn-danger">Pedir Carta</button>
+        <button id="plantarse" class="btn btn-warning">Plantarse</button>
+        <button id="detener" class="btn btn-danger">Detener</button>
+    </div>
+    <div class="container text-center mt-2">
+        <label for="num-jugadores">Número de Jugadores:</label>
+        <select id="num-jugadores" class="form-control w-25 mx-auto">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+        </select>
+    </div>
+    <div id="jugadores" class="container text-center mt-4"></div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="resultadoModal" tabindex="-1" role="dialog" aria-labelledby="resultadoModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="resultadoModalLabel">Resultados del Juego</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body" id="resultadoContenido"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.13.1/underscore-min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        (function() {
+            document.addEventListener("DOMContentLoaded", function() {
+                let deck = [];
+                const suits = ['C', 'D', 'H', 'S'];
+                const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+                let jugadores = [];
+                let turn = 0;
+
+                function createDeck() {
+                    deck = [];
+                    for (let suit of suits) {
+                        for (let value of values) {
+                            deck.push(`${value}${suit}`);
+                        }
+                    }
+                    deck = _.shuffle(deck);
+                }
+
+                function calculatePoints(cards) {
+                    let points = 0;
+                    let aces = 0;
+                    for (let card of cards) {
+                        let value = card.slice(0, -1);
+                        if (value === 'J' || value === 'Q' || value === 'K') {
+                            points += 10;
+                        } else if (value === 'A') {
+                            aces += 1;
+                            points += 11;
+                        } else {
+                            points += parseInt(value);
+                        }
+                    }
+                    while (points > 21 && aces > 0) {
+                        points -= 10;
+                        aces -= 1;
+                    }
+                    return points;
+                }
+
+                function renderCard(player, card) {
+                    const cardImage = document.createElement('img');
+                    cardImage.src = `assets/cartas/${card}.png`;
+                    cardImage.classList.add('carta');
+                    document.getElementById(`jugador-${player}-cartas`).appendChild(cardImage);
+                }
+
+                function renderPoints(player, points) {
+                    document.getElementById(`puntos-jugador-${player}`).textContent = points;
+                }
+
+                function bloquearBotonPedir() {
+                    document.getElementById('pedir-carta').disabled = true;
+                    document.getElementById('plantarse').disabled = true;
+                }
+
+                function desbloquearBotonPedir() {
+                    document.getElementById('pedir-carta').disabled = false;
+                    document.getElementById('plantarse').disabled = false;
+                }
+
+                function pedirCartaJugador() {
+                    if (deck.length === 0) return;
+
+                    let card = deck.pop();
+                    renderCard(turn, card);
+                    jugadores[turn].cartas.push(card);
+                    let puntos = calculatePoints(jugadores[turn].cartas);
+                    jugadores[turn].puntos = puntos;
+                    renderPoints(turn, puntos);
+
+                    if (puntos > 21) {
+                        alert(`Jugador ${jugadores[turn].nombre} ha perdido, se ha pasado de 21 puntos.`);
+                        jugadores[turn].activo = false;
+                        cambiarTurno();
+                    }
+                }
+
+                function plantarse() {
+                    jugadores[turn].activo = false;
+                    cambiarTurno();
+                }
+
+                function cambiarTurno() {
+                    if (jugadores.every(jugador => !jugador.activo)) {
+                        bloquearBotonPedir();
+                        determinarGanador();
+                    } else {
+                        do {
+                            turn = (turn + 1) % jugadores.length;
+                        } while (!jugadores[turn].activo);
+                    }
+                }
+
+                function detenerJuego() {
+                    jugadores[turn].activo = false;
+                    if (jugadores.every(jugador => !jugador.activo)) {
+                        bloquearBotonPedir();
+                    }
+                    determinarGanador();
+                }
+
+                function determinarGanador() {
+                    let jugadoresActivos = jugadores.filter(jugador => jugador.puntos <= 21);
+                    jugadoresActivos.sort((a, b) => b.puntos - a.puntos);
+
+                    let resultadoHtml = `<h5>Clasificación:</h5><ol>`;
+                    jugadoresActivos.forEach((jugador, index) => {
+                        let puesto = index + 1;
+                        if (puesto <= 3) {
+                            resultadoHtml += `<li>Jugador ${jugador.nombre}: ${jugador.puntos} puntos${index === 0 ? " - ¡Felicidades, GANASTE!" : ""}</li>`;
+                        }
+                    });
+                    resultadoHtml += `</ol>`;
+
+                    if (jugadoresActivos.length > 0) {
+                        document.getElementById('resultadoContenido').innerHTML = resultadoHtml;
+                        $('#resultadoModal').modal('show');
+                    } else {
+                        alert('No hay ganador, todos los jugadores se pasaron de 21 puntos.');
+                    }
+                }
+
+                document.getElementById('nuevo-juego').addEventListener('click', function() {
+                    createDeck();
+                    jugadores = [];
+                    turn = 0;
+
+                    const numJugadores = parseInt(document.getElementById('num-jugadores').value);
+                    const jugadoresContainer = document.getElementById('jugadores');
+                    jugadoresContainer.innerHTML = '';
+
+                    for (let i = 0; i < numJugadores; i++) {
+                        let nombreJugador = `Jugador ${i + 1}`;
+                        if (i === 0) {
+                            nombreJugador = prompt('Ingresa el nombre del Jugador 1:', 'Jugador 1') || 'Jugador 1';
+                        }
+
+                        jugadores.push({ id: i, nombre: nombreJugador, cartas: [], puntos: 0, activo: true });
+
+                        const jugadorDiv = document.createElement('div');
+                        jugadorDiv.classList.add('col');
+                        jugadorDiv.innerHTML = `
+                            <h1>${nombreJugador} - <small id="puntos-jugador-${i}">0</small></h1>
+                            <div id="jugador-${i}-cartas"></div>
+                            <button class="btn btn-warning mb-2" onclick="plantarse()">Plantarse</button>
+                        `;
+                        jugadoresContainer.appendChild(jugadorDiv);
+                    }
+
+                    desbloquearBotonPedir();
+                });
+
+                document.getElementById('pedir-carta').addEventListener('click', pedirCartaJugador);
+                document.getElementById('plantarse').addEventListener('click', plantarse);
+                document.getElementById('detener').addEventListener('click', detenerJuego);
+            });
+        })();
+    </script>
+</body>
+</html>
